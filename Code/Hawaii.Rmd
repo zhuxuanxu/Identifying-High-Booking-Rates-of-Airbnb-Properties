@@ -1,0 +1,401 @@
+---
+title: "Project"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_notebook: default
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+
+# This chunk shows/hides the code in your final report. When echo = TRUE, the code
+# is shown in the report. When echo = FALSE, the code is hidden from the final report.
+# We would like to see your code, so please leave the setting as is during the course.
+# This chunk will not show up in your reports, so you can safely ignore its existence.
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+### Load required libraries
+
+```{r}
+
+library("tidyverse")
+library("tidymodels")
+
+```
+
+
+```{r}
+dfa <- read_csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-train-v2.csv") %>% 
+  mutate(high_booking_rate = as.factor(high_booking_rate))
+
+df_hi <- dfa %>% 
+  filter(str_sub(`{randomControl}`, 1, 3) == '109')
+```
+```{r}
+# add columns for specific amenities
+df_hi <- df_hi %>% 
+  mutate(Family.kid.friendly = as.factor(ifelse(grepl("Family/kid friendly", amenities, fixed = TRUE),TRUE,FALSE))) %>% 
+  mutate(parking = ifelse(grepl("parking", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Washer = ifelse(grepl("Washer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Dryer = ifelse(grepl("Dryer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Hair.dryer = ifelse(grepl("Hair dryer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Wifi = ifelse(grepl("Wifi", amenities, fixed = TRUE),TRUE,FALSE))
+```
+
+
+
+
+
+```{r}
+# Function to convert to numeric
+ConvertNumeric = function(dfCol, NAValue){
+  val <- (gsub("\\$", "", dfCol))
+  val <- (gsub("\\%", "", val))
+  val <- suppressWarnings(as.numeric(gsub("\\,", "", val)))
+  val[is.na(val)] = NAValue
+  return(val)
+}
+
+# Function to convert to factor
+ConvertFactor = function(dfCol, GoodVector, NAValue){
+  dfCol[!(dfCol %in% GoodVector)] = NAValue
+  dfCol = as.factor(dfCol)
+  return(dfCol)
+}
+
+
+
+# Create a clean function to clean the dataframe
+
+clean = function(df){
+  # amenities, change to count of amenities
+  df$amenities <- str_count(df$amenities, ",")
+  # beds. Replace NA with most frequent value
+  df$beds <- ConvertNumeric(df$beds, 1)
+  # bedrooms
+  df$bedrooms <- ConvertNumeric(df$bedrooms, 1)
+  #bathrooms
+  df$bathrooms <- ConvertNumeric(df$bathrooms, 1)
+  # bed_type. 
+   df$bed_type <- as.factor(ifelse(df$bed_type == 'Real Bed', 1, 0))
+  # cleaning_fee. Set NA as 0
+  df$cleaning_fee <- ConvertNumeric(df$cleaning_fee, 0)
+  # cancellation_policy
+  df$cancellation_policy <- ConvertFactor(df$cancellation_policy,c('flexible', 'moderate','strict_14_with_grace_period', 'super_strict_30', 'super_strict_60', 'strict'),'other')
+  # extra_people. 
+  df$extra_people <- ConvertNumeric(df$extra_people, 0)
+  #host_response_rate 
+  df$host_response_rate <- ConvertNumeric(df$host_response_rate, 0)
+  #host_response_time
+  df$host_response_time <- ConvertFactor(df$host_response_time, c('a few days or more', 'within a day','within a few hours', 'within an hour'), 'other')
+  # host has profile pic 
+  df$host_has_profile_pic <- ConvertFactor(df$host_has_profile_pic, c(TRUE, FALSE), FALSE)
+  # host identity verified
+  df$host_identity_verified <- ConvertFactor(df$host_identity_verified, c(TRUE, FALSE), FALSE)
+  # host is super host
+  df$host_is_superhost <- ConvertFactor(df$host_is_superhost, c(TRUE, FALSE), FALSE)
+  # host listing count
+  df$host_listings_count <- ConvertNumeric(df$host_listings_count, 1)
+  # count of host verifications
+  df$host_verifications <- str_count(df$host_verifications, ",")
+  # host since
+  df$host_since <- as.factor(ConvertNumeric(lubridate::year(df$host_since), 2019))
+  # market. Keep market with high frequencies
+  df$market <- ConvertFactor(df$market, c('Austin', 'Boston', 'Chicago', 'D.C.', 'Denver', 'East Bay, CA', 'Kauai', 'Las Vegas', 'Los Angeles', 'Maui', 'Miami', 'Minneapolis', 'Nashville', 'New Orleans', 'New York', 'North Carolina Mountians', 'Oahu', 'Portland', 'Providence', 'San Diego', 'San Francisco', 'Seattle', 'South Bay, CA', 'The Big Island'), 'Other')
+  #monthly_price
+  df$monthly_price <- ConvertNumeric(df$monthly_price,0)
+  #weekly_price
+  df$weekly_price <- ConvertNumeric(df$weekly_price, 0)
+  #price
+  df$price <- ConvertNumeric(df$price, 0)
+  # property Type
+  df$property_type <- ConvertFactor(df$property_type, c("Apartment", 'House', 'Condominium', 'Townhouse', 'Guest suite', 'Guesthouse', 'Loft'), 'Other')
+  # review_scores_accuracy
+  df$review_scores_accuracy <- ConvertNumeric(df$review_scores_accuracy, min(df$review_scores_accuracy[is.na(df$review_scores_accuracy) == FALSE]))
+  # review_scores_checkin
+  df$review_scores_checkin <- ConvertNumeric(df$review_scores_checkin, min(df$review_scores_checkin[is.na(df$review_scores_checkin) == FALSE]))
+  # review_scores_cleanliness
+  df$review_scores_cleanliness <- ConvertNumeric(df$review_scores_cleanliness, min(df$review_scores_cleanliness[is.na(df$review_scores_cleanliness) == FALSE]))
+  # review_scores_communication
+  df$review_scores_communication <- ConvertNumeric(df$review_scores_communication, min(df$review_scores_communication[is.na(df$review_scores_communication) == FALSE]))
+  # review_scores_location
+  df$review_scores_location <- ConvertNumeric(df$review_scores_location, min(df$review_scores_location[is.na(df$review_scores_location) == FALSE]))
+  # review_scores_rating
+  df$review_scores_rating <- ConvertNumeric(df$review_scores_rating, min(df$review_scores_rating[is.na(df$review_scores_rating) == FALSE]))
+  # review_scores_value
+  df$review_scores_value<- ConvertNumeric(df$review_scores_value, min(df$review_scores_value[is.na(df$review_scores_value) == FALSE]))
+  # room type
+  df$room_type <- ConvertFactor(df$room_type, c('Entire home/apt', 'Private room', 'Shared room', 'Hotel room'), 'Other')
+  # security deposit
+  df$security_deposit <- ConvertNumeric(df$security_deposit, 0)
+  
+  return(df)
+}
+
+
+```
+
+
+```{r}
+# Use function to clean dataset
+df_hi_clean <- clean(df_hi)
+```
+
+
+
+```{r}
+df_hi_clean <- df_hi_clean %>% 
+  mutate(weekly_discount = ifelse(weekly_price == 0, 10, weekly_price / (price * 7))) %>% 
+  mutate(monthly_discount = ifelse(monthly_price == 0, 10, monthly_price / (price * 30)))
+```
+
+
+```{r}
+# Create a random forest model object
+model_rf <- rand_forest(
+  mtry = 7,
+  trees = 1000,
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")  
+
+# Create recipe
+recipe_rf <- 
+  recipe(high_booking_rate ~ ., data = df_hi_clean) %>% 
+  step_rm(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`, weekly_price, monthly_price)
+ 
+
+# Create workflow
+workflow_rf <- 
+  workflow() %>% 
+  add_model(model_rf) %>% 
+  add_recipe(recipe_rf)
+```
+
+```{r}
+fit_rf <-fit(workflow_rf, data = df_hi_clean)
+```
+
+```{r}
+results_rf <- 
+  predict(fit_rf, df_hi_clean, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(df_hi_clean, Predicted_Probability = .) 
+
+results_rf %>% 
+  select(id, latitude, zipcode, longitude, Predicted_Probability)
+```
+
+```{r}
+output <- results_rf %>% 
+  select(id, latitude, longitude, zipcode, Predicted_Probability, high_booking_rate)
+
+```
+
+```{r}
+write_csv(output, "output.csv")
+```
+
+
+### Weekly and monthly discount analysis
+
+
+```{r}
+discount_analysis <- results_rf %>% 
+  select(id, weekly_discount, monthly_discount, , Predicted_Probability, high_booking_rate)
+
+discount_analysis
+
+```
+
+```{r}
+discount_analysis <- discount_analysis[discount_analysis$weekly_discount != 10,]
+```
+
+# 14247 total properties in Hawaii, 776 have weekly price.
+
+```{r}
+discount_analysis %>% 
+  group_by(weeklyDiscountGroup = cut_interval(weekly_discount, length = 0.1)) %>% 
+  mutate(PredictedProbability = mean(Predicted_Probability)) 
+```
+
+```{r}
+discount_analysis %>% 
+  group_by(weeklyDiscountGroup = cut_interval(weekly_discount, length = 0.1)) %>% 
+  tally()
+```
+
+```{r}
+mean(discount_analysis$Predicted_Probability[discount_analysis$weekly_discount <= 1 & discount_analysis$weekly_discount > 0.9])
+mean(discount_analysis$Predicted_Probability[ discount_analysis$weekly_discount > 1])
+```
+### two sample t test
+```{r}
+ten_twenty <- discount_analysis$Predicted_Probability[discount_analysis$weekly_discount > 0.9 & discount_analysis$weekly_discount <= 1]
+no_discount <- discount_analysis$Predicted_Probability[discount_analysis$weekly_discount > 0.8 & discount_analysis$weekly_discount <= 0.9]
+```
+
+```{r}
+t.test(ten_twenty, no_discount)
+```
+
+
+### amenity effect
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$parking == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$parking == FALSE])
+  
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Washer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Washer == FALSE])
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Dryer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Dryer == FALSE])
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Hair.dryer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Hair.dryer == FALSE])
+```
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Family.kid.friendly == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Family.kid.friendly == FALSE])
+```
+### XGBoost Model
+
+```{r}
+# XGBoost can only have numeric variables
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.factor, as.numeric)
+
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.logical, as.numeric)
+
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.integer, as.numeric)
+
+df_hi_clean$high_booking_rate <- as.factor(df_hi_clean$high_booking_rate)
+
+df_hi_clean <- df_hi_clean %>% 
+  select(-c(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`))
+
+set.seed(123)
+
+df_hi_split <- initial_split(df_hi_clean)
+df_hi_analysis <- training(df_hi_split)
+df_hi_assessment <- testing(df_hi_split)
+```
+
+
+```{r}
+# model specification
+xgb_spec <- boost_tree(
+  trees = 1000,
+  tree_depth = tune(), min_n = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(), mtry = tune(),
+  learn_rate = tune()
+) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+```
+
+```{r}
+# set up possible values for these hyperparameters to try
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  loss_reduction(),
+  sample_size = sample_prop(),
+  finalize(mtry(), df_hi_analysis),
+  learn_rate(),
+  size = 10
+)
+
+xgb_grid
+```
+
+```{r}
+# create recipe 
+recipe3 <- 
+  recipe(high_booking_rate ~ ., data = df_hi_analysis) 
+
+
+# create workflow
+xgb_wf <- workflow() %>% 
+  add_recipe(recipe3) %>% 
+  add_model(xgb_spec)
+  
+```
+
+
+```{r}
+# create cross-validation resamples for tuning our model.
+set.seed(123)
+dfa_folds <- vfold_cv(df_hi_analysis)
+```
+
+```{r}
+
+doParallel::registerDoParallel()
+
+set.seed(234)
+xgb_res <- tune_grid(
+  xgb_wf,
+  resamples = dfa_folds,
+  grid = xgb_grid,
+  control = control_grid(save_pred = TRUE)
+)
+```
+
+```{r}
+best_auc <- select_best(xgb_res, "roc_auc")
+best_auc
+```
+
+```{r}
+# Now let’s finalize our tuneable workflow with these parameter values.
+final_xgb <- finalize_workflow(
+  xgb_wf,
+  best_auc
+)
+
+```
+
+
+```{r}
+fitxgb <-fit(final_xgb, data = df_hi_analysis)
+```
+
+```{r}
+# Apply model in the assessment data
+results3 <- 
+  predict(fitxgb, df_hi_assessment, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(df_hi_assessment, Predicted_Probability = .) 
+
+
+```
+
+
+```{r}
+
+### AUC value
+roc_auc(results3, truth = high_booking_rate, Predicted_Probability, event_level = 'second')
+
+```
+
+
+
+
+

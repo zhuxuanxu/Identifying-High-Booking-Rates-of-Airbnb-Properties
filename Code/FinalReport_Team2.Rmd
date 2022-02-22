@@ -1,0 +1,841 @@
+---
+title: Identifying and Predicting Buying Targets for AirBnb Property Investment in
+  Hawaii
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document:
+    latex_engine: xelatex
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+
+# This chunk shows/hides the code in your final report. When echo = TRUE, the code
+# is shown in the report. When echo = FALSE, the code is hidden from the final report.
+# We would like to see your code, so please leave the setting as is during the course.
+# This chunk will not show up in your reports, so you can safely ignore its existence.
+
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+
+**Market assigned to the team: Hawaii**
+
+**Team members: Zhuxuan Xu, Jin Sun, WanChi Lee, Chunghao Lee, Jiangkun Xiong**
+
+"We, the undersigned, certify that the report submitted is our own original work; all authors participated in the work in a substantive way; all authors have seen and approved the report as submitted; the text, images, illustrations, and other items included in the manuscript do not carry any infringement/plagiarism issue upon any existing copyrighted materials." 
+
+**Table of Contents: **\
+**1. Executive Summary **\
+**2. Main Focus and Questions **\
+**3. Methodology **\
+**4. Results and Findings **\
+**5. Conclusion and Discussion **\
+**6. Reference **\
+
+***
+## 1. Executive Summary
+   The short term rental market has created opportunities for real estate investments. More and more travelers choose Airbnb rentals over hotels in their travel plan. Though lucrative as it seems, the airbnb/ short rental market is one of the most competitive and ever-changing markets for real estate investors. Screening and identifying the right properties to invest has become the pressing challenge for investors who want to stay on top of the airbnb market trend.
+
+   Our goal is to help investors interested in the airbnb market keep pace with the growing Airbnb real-estate business, stay competitive among other hosts, and become a significant player in this industry.To make the prediction, we first built national models to identify the properties with high booking rates and thus high income generating potential. Our best model (XGBoost) achieved 93.9% AUC in the Kaggel competition, using the dataset of Airbnb listings in the United States as of 2019. Then, features were modified and added to the XGBoost model specific to Hawaii based on the market research. According to our model analysis, we find that regions and weekly discounts can significantly affect the booking rate for an Airbnb properties in Hawaii. Some features like Wifi, parking service and family-kid friendly are also important factors that would affect booking rates. Therefore, investors can refer to these features when they are considering to invest in properties in the Hawaii market, as well as how to price/manage and upgrade them to improve booking rates in the future. We also suggest that investors should pay attention to rental pricing, operating cost and invest wisely based on his or her own budget.
+
+***
+## 2. Main Focus and Questions
+   Since launching in 2008, Airbnb has disrupted the hospitality industry, now the Airbnb market is valued at over $35 billion, with over 150 million users worldwide. The average expected annual profit from renting a full two bedroom apartment or house as Airbnb in the 15 cities SmartAsset examined is $20,619. There is a strong market for vacation rentals inHawaii, but the market condition depends heavily on the tourism sector.
+
+### 2.1 Hawaii Market
+   Hawaii consists of four main islands- Oahu, Maui, Big Island, and Kauai, ranking from the most to the least visited places, and Oahu accounts for nearly 50% of the visiting rate. According to the 2019 Annual Visitor Research Report published by Hawaii Tourism Authority, in terms of purpose of trip, vacation, honeymoon, wedding, and business conference are the four top reasons to visit Hawaii. Regarding the length of stay, first-time visitors take 8.24 days on average, while the repeating visitors spend 9 days on average. In addition, lodging continues being the largest spending category among visitors on all islands. For example, Oahu visitors’ daily spending on lodging is around $87 in 2019 increased from $85 in 2018. Based on the fact findings, variables related to price and time components and their impact on the high booking rate will be a part of our main focus. 
+
+### 2.2 Research Questions
+   The first research of our project is whether the high booking rate probability varies by region and by island. We think location is worth further exploring because it usually reflects many considerations, including the distance between Airbnb property and tourist attractions and convenience in transportation, and it is usually regarded as the most important factor in Airbnb real estate investment.
+
+   Our second main focus is how the variable weekly price discount affects the probability of a high booking rate of the model we create. As mentioned above, we find that the average length of stay among Hawaii visitors is around 8 to 9 days - about a week, and therefore, we assume that weekly price discount has an impact on customer booking decisions. 
+   
+   The third research question we are interested in is how specific amenities relate to booking-rate performance of Airbnb property. Amenities we refer here include parking, washer, dryer, hair dryer, Wifi, and other family-kid friendly service and equipment. Since most visitors go to Hawaii for pleasure and plan on a longer vacation, we think that they prefer Airbnb with specific amenities more. 
+
+***
+## 3. Methodology
+
+### 3.1 Kaggle Competition (Model Based on National Data)
+  National data was randomly splitted into the analysis dataset (75%) and assessment dataset (25%). Classification models like logistic regression,and ensemble methods in machine learning like random forest, and XGboost models were built based on the analysis dataset, and the predictive ability of the model was tested based on the assessment dataset as well as the AUC score produced by Kaggle submission. \
+  
+  AUC score based on Kaggle submission:\
+    Logistic: 0.8765\
+    Random Forest: 0.9318\
+    XGBoost: 0.9399\
+  
+  We found that XGBoost model had the highest AUC value among all models, indicating the best predictive performance. So XGBoost was chosen to build the predictive model specific to Hawaii market in the next step.
+
+
+```{r}
+#### Load required libraries
+library("tidyverse")
+library("tidymodels")
+
+```
+
+
+
+```{r}
+#### Load Airbnb National Data
+dfa <- read_csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-train-v2.csv") %>% 
+  mutate(high_booking_rate = as.factor(high_booking_rate))
+
+
+```
+
+#### 3.1.1 Data Preprocessing
+
+  The first step of data preparation is data cleaning. We created cleaning function to transforme all variables we chose into either numeric variables or factor variables. There are 44 variables which include 27 numeric variables and 17 factor variables in our model. We found that there are many blank cells in the dataset. Therefore, we used either average values or highest frequency values to fill blank numeric variables. As for factor variables, we fill with either “other” or highest frequency values to fill NA values.
+
+  Numeric Variables: accommodates, availability_30,availability_60,availability_90,availability_365,bathrooms,bedrooms,beds,amenities, cleaning_fee, extra_people, guests_included, host_listings_count, host_response_rate, host_verifications, maximum_nights, minimum_nights, monthly_price, price, review_scores_accuracy, review_scores_checkin, review_scores_cleanliness, review_scores_communication, review_scores_location, review_scores_rating, review_scores_value, security_deposit, weekly_price
+  
+  Factor Variables: bed_type,  cancellation_policy, host_identity_verified, host_has_profile_pic, host_is_superhost, host_response_time, host_since, instant_bookable, is_location_exact, market, property_type, require_guest_phone_verification, require_guest_profile_picture, requires_license, room_type
+
+```{r}
+# Function to convert to numeric
+ConvertNumeric = function(dfCol, NAValue){
+  val <- (gsub("\\$", "", dfCol))
+  val <- (gsub("\\%", "", val))
+  val <- suppressWarnings(as.numeric(gsub("\\,", "", val)))
+  val[is.na(val)] = NAValue
+  return(val)
+}
+
+# Function to convert to factor
+ConvertFactor = function(dfCol, GoodVector, NAValue){
+  dfCol[!(dfCol %in% GoodVector)] = NAValue
+  dfCol = as.factor(dfCol)
+  return(dfCol)
+}
+
+
+
+# Create a clean function to clean the dataframe
+
+clean = function(df){
+  # amenities, change to count of amenities
+  df$amenities <- str_count(df$amenities, ",")
+  # beds. Replace NA with most frequent value
+  df$beds <- ConvertNumeric(df$beds, 1)
+  # bedrooms
+  df$bedrooms <- ConvertNumeric(df$bedrooms, 1)
+  #bathrooms
+  df$bathrooms <- ConvertNumeric(df$bathrooms, 1)
+  # bed_type. 
+  df$bed_type <- ConvertFactor(df$bed_type, c('Airbed', 'Couch', 'Futon', 'Pull-out Sofa', 'Real Bed'), 'Other')
+  # cleaning_fee. Set NA as 0
+  df$cleaning_fee <- ConvertNumeric(df$cleaning_fee, 0)
+  # cancellation_policy
+  df$cancellation_policy <- ConvertFactor(df$cancellation_policy,c('flexible', 'moderate','strict_14_with_grace_period', 'super_strict_30', 'super_strict_60', 'strict', 'luxury_moderate', 'luxury_no_refund', 'luxury_super_strict_125', 'luxury_super_strict_95'),'other')
+  # extra_people. 
+  df$extra_people <- ConvertNumeric(df$extra_people, 0)
+  #host_response_rate 
+  df$host_response_rate <- ConvertNumeric(df$host_response_rate, 0)
+  #host_response_time
+  df$host_response_time <- ConvertFactor(df$host_response_time, c('a few days or more', 'within a day','within a few hours', 'within an hour'), 'other')
+  # host has profile pic 
+  df$host_has_profile_pic <- ConvertFactor(df$host_has_profile_pic, c(TRUE, FALSE), FALSE)
+  # host identity verified
+  df$host_identity_verified <- ConvertFactor(df$host_identity_verified, c(TRUE, FALSE), FALSE)
+  # host is super host
+  df$host_is_superhost <- ConvertFactor(df$host_is_superhost, c(TRUE, FALSE), FALSE)
+  # host listing count
+  df$host_listings_count <- ConvertNumeric(df$host_listings_count, 1)
+  # count of host verifications
+  df$host_verifications <- str_count(df$host_verifications, ",")
+  # host since
+  df$host_since <- as.factor(ConvertNumeric(lubridate::year(df$host_since), 2019))
+  # market. Keep market with high frequencies
+  df$market <- ConvertFactor(df$market, c('Abaco','Austin', 'Boston', 'Chicago', 'Columbus','D.C.', 'Denver', 'East Bay, CA','East Bay CA', 'Kauai', 'Las Vegas', 'Los Angeles', 'Malibu','Maui', 'Miami', 'Minneapolis', 'Nashville', 'New Orleans', 'New York', 'North Carolina Mountians', 'Oahu', 'Portland', 'Providence', 'San Diego', 'San Francisco', 'Seattle', 'South Bay, CA','South Bay CA','South Florida Atlantic Coast', 'The Big Island'), 'Other')
+  #monthly_price
+  df$monthly_price <- as.factor(ifelse(is.na(df$monthly_price) == FALSE, 1, 0))
+  #weekly_price
+  df$weekly_price <- as.factor(ifelse(is.na(df$weekly_price) == FALSE, 1, 0))
+  #price
+  df$price <- ConvertNumeric(df$price, 0)
+  # property Type
+  df$property_type <- ConvertFactor(df$property_type, c('Aparthotel','Apartment', 'Bed and Breakfast','Boutique hotel', 'Bungalow','Cabin','Camper/RV','House', 'Condominium', 'Cottage','Townhouse', 'Guest suite', 'Guesthouse', 'Hostel','Hotel','Loft','Resort','Serviced apartment','Tiny house', 'Villa'), 'Other')
+  # review_scores_accuracy
+  df$review_scores_accuracy <- ConvertNumeric(df$review_scores_accuracy, min(df$review_scores_accuracy[is.na(df$review_scores_accuracy) == FALSE]))
+  # review_scores_checkin
+  df$review_scores_checkin <- ConvertNumeric(df$review_scores_checkin, min(df$review_scores_checkin[is.na(df$review_scores_checkin) == FALSE]))
+  # review_scores_cleanliness
+  df$review_scores_cleanliness <- ConvertNumeric(df$review_scores_cleanliness, min(df$review_scores_cleanliness[is.na(df$review_scores_cleanliness) == FALSE]))
+  # review_scores_communication
+  df$review_scores_communication <- ConvertNumeric(df$review_scores_communication, min(df$review_scores_communication[is.na(df$review_scores_communication) == FALSE]))
+  # review_scores_location
+  df$review_scores_location <- ConvertNumeric(df$review_scores_location, min(df$review_scores_location[is.na(df$review_scores_location) == FALSE]))
+  # review_scores_rating
+  df$review_scores_rating <- ConvertNumeric(df$review_scores_rating, min(df$review_scores_rating[is.na(df$review_scores_rating) == FALSE]))
+  # review_scores_value
+  df$review_scores_value<- ConvertNumeric(df$review_scores_value, min(df$review_scores_value[is.na(df$review_scores_value) == FALSE]))
+  # room type
+  df$room_type <- ConvertFactor(df$room_type, c('Entire home/apt', 'Private room', 'Shared room', 'Hotel room'), 'Other')
+  # security deposit
+  df$security_deposit <- ConvertNumeric(df$security_deposit, 0)
+  
+  return(df)
+}
+
+
+```
+
+
+```{r}
+# Use function to clean dataset
+dfa_clean <- clean(dfa)
+skimr::skim(dfa_clean)
+```
+
+
+```{r}
+# Split the data
+
+set.seed(123)
+
+dfa_split <- initial_split(dfa_clean)
+dfa_analysis <- training(dfa_split)
+dfa_assessment <- testing(dfa_split)
+
+```
+
+#### 3.1.2 Logistic Regression Model
+
+```{r}
+
+# Create a logistic model object
+log_model1 <- 
+  logistic_reg() %>% 
+  set_engine("glm")
+
+# Create recipe
+recipe1 <- 
+  recipe(high_booking_rate ~ ., data = dfa_analysis) %>% 
+  step_rm(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`)
+ 
+
+# Create a workflow
+workflow1 <- 
+  workflow() %>% 
+  add_model(log_model1) %>% 
+  add_recipe(recipe1)
+
+
+```
+
+```{r}
+
+log_fit1 <-fit(workflow1, data = dfa_analysis)
+
+```
+
+```{r}
+
+# Apply model in the assessment data
+results1 <- 
+  predict(log_fit1, dfa_assessment, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(dfa_assessment, Predicted_Probability = .)
+
+
+
+```
+
+
+```{r}
+
+# Predictive performance measure
+
+### AUC value
+roc_auc(results1, truth = high_booking_rate, Predicted_Probability, event_level = 'second')
+
+```
+
+
+#### 3.1.3 Random Forest Model
+```{r}
+
+
+# Create a random forest model object
+model2 <- rand_forest(
+  mtry = 7,
+  trees = 1000,
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")  
+
+# Create recipe
+recipe2 <- 
+  recipe(high_booking_rate ~ ., data = dfa_analysis) %>% 
+  step_rm(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`)
+ 
+
+# Create workflow
+workflow2 <- 
+  workflow() %>% 
+  add_model(model2) %>% 
+  add_recipe(recipe2)
+
+```
+
+
+
+```{r}
+fit2 <-fit(workflow2, data = dfa_analysis)
+
+```
+
+
+```{r}
+# Apply model in the assessment data
+results2 <- 
+  predict(fit2, dfa_assessment, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(dfa_assessment, Predicted_Probability = .) 
+
+
+```
+
+
+```{r}
+# Predictive performance measure
+
+### AUC value
+roc_auc(results2, truth = high_booking_rate, Predicted_Probability, event_level = 'second')
+
+```
+
+#### 3.1.4 XGBoost Model
+
+```{r}
+# XGBoost can only have numeric variables
+dfa_clean <- dfa_clean %>% 
+  mutate_if(is.factor, as.numeric)
+
+dfa_clean <- dfa_clean %>% 
+  mutate_if(is.logical, as.numeric)
+
+dfa_clean <- dfa_clean %>% 
+  mutate_if(is.integer, as.numeric)
+
+dfa_clean$high_booking_rate <- as.factor(dfa_clean$high_booking_rate)
+
+dfa_clean <- dfa_clean %>% 
+  select(-c(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`))
+
+set.seed(123)
+
+dfa_split <- initial_split(dfa_clean)
+dfa_analysis <- training(dfa_split)
+dfa_assessment <- testing(dfa_split)
+```
+
+
+```{r}
+# model specification
+xgb_spec <- boost_tree(
+  trees = 1000,
+  tree_depth = tune(), min_n = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(), mtry = tune(),
+  learn_rate = tune()
+) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+```
+
+```{r}
+# set up possible values for these hyperparameters to try
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  loss_reduction(),
+  sample_size = sample_prop(),
+  finalize(mtry(), dfa_analysis),
+  learn_rate(),
+  size = 10
+)
+
+xgb_grid
+```
+
+```{r}
+# create recipe 
+recipe3 <- 
+  recipe(high_booking_rate ~ ., data = dfa_analysis) 
+
+
+# create workflow
+xgb_wf <- workflow() %>% 
+  add_recipe(recipe3) %>% 
+  add_model(xgb_spec)
+  
+```
+
+
+```{r}
+# create cross-validation resamples for tuning our model.
+set.seed(123)
+dfa_folds <- vfold_cv(dfa_analysis)
+```
+
+```{r}
+
+doParallel::registerDoParallel()
+
+set.seed(234)
+xgb_res <- tune_grid(
+  xgb_wf,
+  resamples = dfa_folds,
+  grid = xgb_grid,
+  control = control_grid(save_pred = TRUE)
+)
+```
+
+```{r}
+best_auc <- select_best(xgb_res, "roc_auc")
+best_auc
+```
+
+```{r}
+# Now let’s finalize our tuneable workflow with these parameter values.
+final_xgb <- finalize_workflow(
+  xgb_wf,
+  best_auc
+)
+
+```
+
+```{r}
+# What are the most important parameters for variable importance?
+library(vip)
+
+final_xgb %>%
+  fit(data = dfa_analysis) %>%
+  pull_workflow_fit() %>%
+  vip(geom = "point")
+```
+
+```{r}
+fitxgb <-fit(final_xgb, data = dfa_analysis)
+```
+
+```{r}
+# Apply model in the assessment data
+results3 <- 
+  predict(fitxgb, dfa_assessment, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(dfa_assessment, Predicted_Probability = .)
+
+
+```
+
+
+```{r}
+
+### AUC value
+roc_auc(results3, truth = high_booking_rate, Predicted_Probability, event_level = 'second')
+
+```
+
+
+#### 3.1.5 Prediction on unlabelled test dataset
+
+```{r}
+
+# Import the test dataset
+dfa_test<- read_csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-test-v2.csv") 
+
+```
+
+
+```{r}
+# Use function to clean dataset
+dfa_test_clean <- clean(dfa_test)
+```
+
+```{r}
+dfa_test_clean <- dfa_test_clean %>% 
+  mutate_if(is.factor, as.numeric)
+
+dfa_test_clean <- dfa_test_clean %>% 
+  mutate_if(is.logical, as.numeric)
+
+dfa_test_clean <- dfa_test_clean %>% 
+  mutate_if(is.integer, as.numeric)
+
+
+dfa_test_clean <- dfa_test_clean %>% 
+  select(-c(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`))
+
+```
+
+
+
+```{r}
+
+# Produce prediction value for the test data
+# Apply model in the test data
+results_test <- 
+  predict(fitxgb, dfa_test_clean, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(dfa_test_clean, high_booking_rate = .) 
+
+
+airbnb <- results_test %>% 
+  select(high_booking_rate)
+
+
+
+
+```
+
+```{r}
+dfa_id<- read_csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-test-v2.csv") %>% 
+  select(id)
+
+airbnb <-  dfa_id %>% 
+  bind_cols(airbnb)
+```
+
+```{r}
+airbnb
+```
+
+
+
+```{r}
+# output CSV file to make submission in the Kaggle website.
+# write_csv(airbnb, 'airbnb.csv')
+
+```
+
+### 3.2 Model Specific to Hawaii Market
+
+  As mentioned in the market research, Hawaii is a place of pleasure and vacation. People visiting Hawaii for traveling, wedding and honeymoon. So they usually spend longer time in Hawaii. For this reason, price is a big concern for visitors to choose Airbnb. In the Hawaii model, we adjusted variables selection. First, we added weekly_discount, which equals to 1 - weekly_price/(daily_price*7), in the Hawaii model to replace weekly_price, because we assume a high booking rate is sensitive to discount. Second, we added variables like Family-kid friendly, parking, washer, dryer, hair dryer, Wifi all to the Hawaii model, because we assume these variables are important for traveling visitors to select Airbnb. As a result, with both using XGboost, after adding these variables, the AUC of Hawaii model reached to 0.9374, which is higher than 0.9319, the variable we use in Kaggle. So it indicates that our modification could further improve the predictive ability in Hawaii market.
+
+```{r}
+# filter data specific for Hawaii
+dfa <- read_csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-train-v2.csv") %>% 
+  mutate(high_booking_rate = as.factor(high_booking_rate))
+
+df_hi <- dfa %>% 
+  filter(str_sub(`{randomControl}`, 1, 3) == '109')
+```
+
+```{r}
+# add columns for specific amenities
+df_hi <- df_hi %>% 
+  mutate(Family.kid.friendly = as.factor(ifelse(grepl("Family/kid friendly", amenities, fixed = TRUE),TRUE,FALSE))) %>% 
+  mutate(parking = ifelse(grepl("parking", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Washer = ifelse(grepl("Washer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Dryer = ifelse(grepl("Dryer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Hair.dryer = ifelse(grepl("Hair dryer", amenities, fixed = TRUE),TRUE,FALSE)) %>% 
+  mutate(Wifi = ifelse(grepl("Wifi", amenities, fixed = TRUE),TRUE,FALSE))
+```
+
+```{r}
+# use clean function to clean dataset
+df_hi_clean <- clean(df_hi)
+```
+
+```{r}
+# create weekly discount variable
+df_hi_clean <- df_hi_clean %>% 
+  mutate(weekly_discount = ifelse(weekly_price == 0, 10, weekly_price / (price * 7))) 
+```
+
+#### 3.2.1 Apply XGBoost model for Hawaii Data
+
+```{r}
+# XGBoost can only have numeric variables
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.factor, as.numeric)
+
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.logical, as.numeric)
+
+df_hi_clean <- df_hi_clean %>% 
+  mutate_if(is.integer, as.numeric)
+
+df_hi_clean$high_booking_rate <- as.factor(df_hi_clean$high_booking_rate)
+
+df_hi_clean <- df_hi_clean %>% 
+  select(-c(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, `{randomControl}`))
+
+set.seed(123)
+
+df_hi_split <- initial_split(df_hi_clean)
+df_hi_analysis <- training(df_hi_split)
+df_hi_assessment <- testing(df_hi_split)
+```
+
+
+```{r}
+# model specification
+xgb_spec <- boost_tree(
+  trees = 1000,
+  tree_depth = tune(), min_n = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(), mtry = tune(),
+  learn_rate = tune()
+) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+```
+
+```{r}
+# set up possible values for these hyperparameters to try
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  loss_reduction(),
+  sample_size = sample_prop(),
+  finalize(mtry(), df_hi_analysis),
+  learn_rate(),
+  size = 10
+)
+
+xgb_grid
+```
+
+```{r}
+# create recipe 
+recipe3 <- 
+  recipe(high_booking_rate ~ ., data = df_hi_analysis) 
+
+
+# create workflow
+xgb_wf <- workflow() %>% 
+  add_recipe(recipe3) %>% 
+  add_model(xgb_spec)
+  
+```
+
+
+```{r}
+# create cross-validation resamples for tuning our model.
+set.seed(123)
+dfa_folds <- vfold_cv(df_hi_analysis)
+```
+
+```{r}
+
+doParallel::registerDoParallel()
+
+set.seed(234)
+xgb_res <- tune_grid(
+  xgb_wf,
+  resamples = dfa_folds,
+  grid = xgb_grid,
+  control = control_grid(save_pred = TRUE)
+)
+```
+
+```{r}
+best_auc <- select_best(xgb_res, "roc_auc")
+best_auc
+```
+
+```{r}
+# Now let’s finalize our tuneable workflow with these parameter values.
+final_xgb <- finalize_workflow(
+  xgb_wf,
+  best_auc
+)
+
+```
+
+
+```{r}
+fitxgb <-fit(final_xgb, data = df_hi_analysis)
+```
+
+```{r}
+# Apply model in the assessment data
+results_xgb <- 
+  predict(fitxgb, df_hi_assessment, type = 'prob') %>% 
+  pluck(2) %>% 
+  bind_cols(df_hi_assessment, Predicted_Probability = .) 
+
+
+```
+
+
+```{r}
+
+### AUC value
+roc_auc(results_xgb, truth = high_booking_rate, Predicted_Probability, event_level = 'second')
+
+```
+
+#### 3.2.2 Determine Threshold/Cutoff for Classification
+
+   Cost matrix was applied to determine the cutoff. Because we are creating a model trying to provide business advice for property buying, so we would like to lower False Positive because it brings most cost to investors. False positive property is predicted to have a high booking rate but actually not a good property. So investors who want to get rid of these properties, therefore, have to spend more resources(time, money, etc.) to sell these false positive properties. That’s why in cost matrix, we set the cost of false positives 3 times higher than false negative and true positives. 
+
+| Cost Matrix   | Actual = 0    | Actual = 1    |
+|:-------------:|:-------------:|:-------------:| 
+| Predicted = 0 | 0             | 1             |
+| Predicted = 1 | 3             | 1             |
+
+
+  We tried cutoff value range from 0.3 to 0.7 and found that cutoff = 0.7 had the lowest cost based on the cost matrix. So we pick 0.7 as the cutoff for the classification model. 
+  
+| Cutoff        | Cost          |
+|:-------------:|:-------------:| 
+| 0.3           | 2318          | 
+| 0.4           | 1832          |   
+| 0.5           | 1463          |   
+| 0.6           | 1187          | 
+| 0.7           | 992           | 
+
+#### 3.2.3 Regional Effect for Hawaii Market
+  A CSV file cointating id, latitude, longtitude, zipcode, Predicted_Probability, and high_booking_rate was created and output to Tableau to explore the first research question which is whether the high-booking-rate probabilities differ by region in the Hawaii island.
+  
+```{r}
+
+output <- results_xgb %>% 
+  select(id, latitude, longitude, zipcode, Predicted_Probability, high_booking_rate)
+
+# write_csv(output, "output.csv")
+```
+
+![Which region is not good for investment?](/Users/xuzhuxuan/Desktop/Course/DataMining/Project/Region.png)
+
+  The map on the left-hand side is the dots of Airbnb properties mapped in the Hawaii island, the color closer to red indicates the property is bad, and closer to green indicates the property is good. The map on the right-hand side shows the average value of high-booking-rate properties in each region. From this map, we can clearly see that there are some regions not good for investment considerations. For example, Airbnb properties in these two regions (Zip code: 96707, 96761) are full of red dots and have average high-booking-rate probabilities less than 0.10. Since investors usually need on-the-spot visits to the property before they make the final decision whether to buy it or not, this information could help investors narrow down their visiting list to save their time.
+
+#### 3.2.3 Weekly Discount Effect for Hawaii Market
+  The second question is how does weekly price discount could affect the probability of high-booking rate produced by our best model since we know from the market research that the average length-of-stay for visitors is over 8 days.
+  
+```{r}
+# 14247 total properties in Hawaii, 776 have weekly price.
+
+discount_analysis <- results_xgb %>% 
+  select(id, weekly_discount, monthly_discount, , Predicted_Probability, high_booking_rate)
+
+discount_analysis <- discount_analysis[discount_analysis$weekly_discount != 10,]
+
+```
+
+```{r}
+discount_analysis %>% 
+  group_by(weeklyDiscountGroup = cut_interval(weekly_discount, length = 0.1)) %>% 
+  tally()
+```
+
+```{r}
+mean(discount_analysis$Predicted_Probability[discount_analysis$weekly_discount <= 1 & discount_analysis$weekly_discount > 0.9])
+mean(discount_analysis$Predicted_Probability[ discount_analysis$weekly_discount > 1])
+```
+
+| Weekly Discount Interval | Number         | High-booking-rate Probability  |
+|:------------------------:|:--------------:|:------------------------------:| 
+| >=30%                    | 92             | 0.4546                         |
+| 20% ~ 30%                | 127            | 0.6417                         |
+| 10% ~ 20%                | 197            | 0.6730                         |
+| 0% ~ 10%                 | 183            | 0.6020                         |
+| No discount              | 177            | 0.5967                         |
+
+Note: High-booking-rate Probability for property cannot stay higher than a week = 0.2124 \
+
+  Next, in order to compare the value to check whether the difference between different intervals is significant, the two-sample t-test for the unequal sample size is applied. 
+  
+```{r}
+ten_twenty <- discount_analysis$Predicted_Probability[discount_analysis$weekly_discount > 0.9 & discount_analysis$weekly_discount <= 1]
+no_discount <- discount_analysis$Predicted_Probability[discount_analysis$weekly_discount > 0.8 & discount_analysis$weekly_discount <= 0.9]
+```
+
+```{r}
+t.test(ten_twenty, no_discount)
+```
+
+Two-sample t test for unequal sample size (unequal variance): \
+Difference between 10% ~ 20% and no discount is significant (p-value = 0.01). \
+Difference between 10% ~ 20% and 20% ~ 30% is not significant (p-value = 0.3623). \
+Difference between 10% ~ 20% and 0 ~ 10% is significant (p-value = 0.02). \
+
+#### 3.2.4 Amenities Effect for Hawaii Market
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$parking == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$parking == FALSE])
+  
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Washer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Washer == FALSE])
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Dryer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Dryer == FALSE])
+```
+
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Hair.dryer == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Hair.dryer == FALSE])
+```
+```{r}
+mean(results_rf$Predicted_Probability[results_rf$Family.kid.friendly == TRUE])
+mean(results_rf$Predicted_Probability[results_rf$Family.kid.friendly == FALSE])
+```
+
+
+![How do provided amenities affect probability?](/Users/xuzhuxuan/Desktop/Course/DataMining/Project/Amenity.png)
+
+***
+## 4. Results and Finding
+
+  For the first research question, we used tableau to show the distribution of predicted probability of high booking rates in different regions for the Hawaii market. The result shows some regions had pretty low probability of high booking rates. Since investors usually need on-the-spot visits to the property before they make the final decision whether to buy it or not, this information could help investors narrow down their visiting list to save their time.
+
+  For the second research question, we found that when the weekly discount is between 10% to 20%, one property has the highest average probability of becoming a good property. For properties that cannot stay higher than a week, the probability is just 0.2. This difference brings the first management insight that the property owner needs to allow customers to book more than a week. Next, in order to compare the value to check whether the difference between different intervals is significant, the two-sample t-test for the unequal sample size is applied. Based on the t-test result, the difference between 10 to 20% and 20 to 30% is not statistically significant, so we put forward the second management insight which is to choose the 10% to 30% weekly discount as the price management strategy.
+  
+  The last research question is about special amenities in the property. According to our analysis, we can see that the difference for properties with or without dryer and washer is not huge, the property without washer and dryer even have slightly larger probabilities. So we raise the point that the washer and dryer are not important for Airbnb in Hawaii. Properties with or without hair dryer, parking, Wifi, family-kid friendly make differences in the probability, so our management recommendation for the homeowner is to add those important amenities into their house. 
+
+***
+## 5. Conclusion & Discussion
+
+  The ultimate objective for the investor is to maximize the net profit, which includes the operating profit gained from renting the property and the capital gain earned from selling the property.
+
+  The operating income is directly related to total occupancy and the rental pricing over the year. High booking rate will be one of the most important indicators for occupancy rate -- which is what our project focuses on.
+
+  Our analysis concludes that for the Hawaii market, property region, weekly discounts, and features like wifi, parking service and family-kid friendly features are factors that can affect booking rates. When making an investment decision, the investor should pay attention to the region and include features mentioned above when running the airbnb business.
+
+  The other factors regarding profitability of an Airbnb property are not discussed in our analysis. Therefore, in order to make the long term investment successful, the investor should consider other factors besides high booking rate, such as:Property location, Property condition, Property age, Operating cost such as utilities, Property price and investor’s budget.
+
+  After taking all the factors into consideration, we believe the investor will be able to make a wise investment decision and gain in the long term.
+
+***
+## 6. References
+
+Deane, Steve. “2021 Airbnb Statistics: Usage, Demographics, and Revenue Growth.” Stratos Jet Charters, Inc., 27 Jan. 2021, www.stratosjets.com/blog/airbnb-statistics/#:~:text=How Many Users Does Airbnb,in an Airbnb every night.
+
+Wallace, Nick. “Where Do Airbnb Hosts Make the Most Money?” SmartAsset, SmartAsset, 20 Feb. 2018, smartasset.com/mortgage/where-do-airbnb-hosts-make-the-most-money.
+
+Meenderman, Malia L. “Hawaii Investment Properties, the Airbnb Effect - Hawaii Vacation Rentals.” Hawaii Real Estate | Luxury Homes for Sale | Find Condos in Hawaii, Malia L. Meenderman Https://Www.hawaii.house/Wp-Content/Uploads/2018/11/Hawaiihouse@2x.Png, 23 Jan. 2020, www.hawaii.house/articles/hawaii-investment-properties-airbnb-effect/.
+
+“Research.” Hawaii Tourism Authority, www.hawaiitourismauthority.org/research//.
+
+Derrick, John C. “Selecting the Best Hawaiian Island.” Hawaii Travel Guide, GuideofUS Hawaii, www.hawaii-guide.com/selecting-the-best-hawaiian-island.
+
+
+Bizjournals.com, www.bizjournals.com/pacific/news/2017/02/22/top-airbnb-listings-in-honolulu-and-how-much.html.
+
+Procell, Carlie, and Stewart Yerton. “9 Charts That Show How Hawaii Tourism Is Changing.” Honolulu Civil Beat, 18 Mar. 2020, www.civilbeat.org/2019/07/9-charts-that-show-how-hawaii-tourism-is-changing/.
+
+
+
+
+
+
+
+
+
+
+
+

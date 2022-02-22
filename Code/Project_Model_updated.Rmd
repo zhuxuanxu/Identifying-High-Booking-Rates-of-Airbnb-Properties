@@ -1,0 +1,320 @@
+---
+title: "Project"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_notebook: default
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+
+# This chunk shows/hides the code in your final report. When echo = TRUE, the code
+# is shown in the report. When echo = FALSE, the code is hidden from the final report.
+# We would like to see your code, so please leave the setting as is during the course.
+# This chunk will not show up in your reports, so you can safely ignore its existence.
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+### Load required libraries
+
+```{r}
+
+library("tidyverse")
+library("tidymodels")
+
+```
+
+### Load Airbnb data
+
+```{r}
+
+dfa <- read.csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-train.csv") %>% 
+  mutate(high_booking_rate = as.factor(high_booking_rate))
+
+str(dfa, give.attr = F)
+
+```
+
+cleaning_fee, extra_people, monthly_price, price, security_deposit, weekly_price
+host_response_rate
+
+### Data Preprocessing
+
+```{r}
+# Function to convert to numeric
+ConvertNumeric = function(dfCol, NAValue){
+  val <- (gsub("\\$", "", dfCol))
+  val <- (gsub("\\%", "", val))
+  val <- suppressWarnings(as.numeric(gsub("\\,", "", val)))
+  val[is.na(val)] = NAValue
+  return(val)
+}
+
+# Function to convert to factor
+ConvertFactor = function(dfCol, GoodVector, NAValue){
+  dfCol[!(dfCol %in% GoodVector)] = NAValue
+  dfCol = as.factor(dfCol)
+  return(dfCol)
+}
+
+
+
+# Create a clean function to clean the dataframe
+
+clean = function(df){
+  # amenities, change to count of amenities
+  df$amenities <- str_count(df$amenities, ",")
+  # beds. Replace NA with most frequent value
+  df$beds <- ConvertNumeric(df$beds, 1)
+  # bedrooms
+  df$bedrooms <- ConvertNumeric(df$bedrooms, 1)
+  #bathrooms
+  df$bathrooms <- ConvertNumeric(df$bathrooms, 1)
+  # bed_type. 
+   df$bed_type <- as.factor(ifelse(df$bed_type == 'Real Bed', 1, 0))
+  # cleaning_fee. Set NA as 0
+  df$cleaning_fee <- ConvertNumeric(df$cleaning_fee, 0)
+  # cancellation_policy
+  df$cancellation_policy <- ConvertFactor(df$cancellation_policy,c('flexible', 'moderate','strict_14_with_grace_period', 'super_strict_30', 'super_strict_60', 'strict'),'other')
+  # extra_people. 
+  df$extra_people <- ConvertNumeric(df$extra_people, 0)
+  #host_response_rate 
+  df$host_response_rate <- ConvertNumeric(df$host_response_rate, 0)
+  #host_response_time
+  df$host_response_time <- ConvertFactor(df$host_response_time, c('a few days or more', 'within a day','within a few hours', 'within an hour'), 'other')
+  # host has profile pic 
+  df$host_has_profile_pic <- ConvertFactor(df$host_has_profile_pic, c(TRUE, FALSE), FALSE)
+  # host identity verified
+  df$host_identity_verified <- ConvertFactor(df$host_identity_verified, c(TRUE, FALSE), FALSE)
+  # host is super host
+  df$host_is_superhost <- ConvertFactor(df$host_is_superhost, c(TRUE, FALSE), FALSE)
+  # host listing count
+  df$host_listings_count <- ConvertNumeric(df$host_listings_count, 1)
+  # count of host verifications
+  df$host_verifications <- str_count(df$host_verifications, ",")
+  # host since
+  df$host_since <- as.factor(ConvertNumeric(lubridate::year(df$host_since), 2019))
+  # market. Keep market with high frequencies
+  df$market <- ConvertFactor(df$market, c('Austin', 'Boston', 'Chicago', 'D.C.', 'Denver', 'East Bay, CA', 'Kauai', 'Las Vegas', 'Los Angeles', 'Maui', 'Miami', 'Minneapolis', 'Nashville', 'New Orleans', 'New York', 'North Carolina Mountians', 'Oahu', 'Portland', 'Providence', 'San Diego', 'San Francisco', 'Seattle', 'South Bay, CA', 'The Big Island'), 'Other')
+  #monthly_price
+  df$monthly_price <- as.factor(ifelse(is.na(df$monthly_price) == FALSE, 1, 0))
+  #weekly_price
+  df$weekly_price <- as.factor(ifelse(is.na(df$weekly_price) == FALSE, 1, 0))
+  #price
+  df$price <- ConvertNumeric(df$price, 0)
+  # property Type
+  df$property_type <- ConvertFactor(df$property_type, c("Apartment", 'House', 'Condominium', 'Townhouse', 'Guest suite', 'Guesthouse', 'Loft'), 'Other')
+  # review_scores_accuracy
+  df$review_scores_accuracy <- ConvertNumeric(df$review_scores_accuracy, min(df$review_scores_accuracy[is.na(df$review_scores_accuracy) == FALSE]))
+  # review_scores_checkin
+  df$review_scores_checkin <- ConvertNumeric(df$review_scores_checkin, min(df$review_scores_checkin[is.na(df$review_scores_checkin) == FALSE]))
+  # review_scores_cleanliness
+  df$review_scores_cleanliness <- ConvertNumeric(df$review_scores_cleanliness, min(df$review_scores_cleanliness[is.na(df$review_scores_cleanliness) == FALSE]))
+  # review_scores_communication
+  df$review_scores_communication <- ConvertNumeric(df$review_scores_communication, min(df$review_scores_communication[is.na(df$review_scores_communication) == FALSE]))
+  # review_scores_location
+  df$review_scores_location <- ConvertNumeric(df$review_scores_location, min(df$review_scores_location[is.na(df$review_scores_location) == FALSE]))
+  # review_scores_rating
+  df$review_scores_rating <- ConvertNumeric(df$review_scores_rating, min(df$review_scores_rating[is.na(df$review_scores_rating) == FALSE]))
+  # review_scores_value
+  df$review_scores_value<- ConvertNumeric(df$review_scores_value, min(df$review_scores_value[is.na(df$review_scores_value) == FALSE]))
+  # room type
+  df$room_type <- ConvertFactor(df$room_type, c('Entire home/apt', 'Private room', 'Shared room', 'Hotel room'), 'Other')
+  # security deposit
+  df$security_deposit <- ConvertNumeric(df$security_deposit, 0)
+  
+  return(df)
+}
+
+
+```
+
+
+```{r}
+# Use function to clean dataset
+dfa_clean <- clean(dfa)
+str(dfa_clean)
+```
+
+
+
+
+
+```{r}
+# Split the data
+
+set.seed(123)
+
+dfa_split <- initial_split(dfa_clean)
+dfa_analysis <- training(dfa_split)
+dfa_assessment <- testing(dfa_split)
+
+```
+
+### Logistic regression
+```{r}
+
+# Create a logistic model object
+log_model1 <- 
+  logistic_reg() %>% 
+  set_engine("glm")
+
+# Create recipe
+recipe1 <- 
+  recipe(high_booking_rate ~ ., data = dfa_analysis) %>% 
+  step_rm(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, X.randomControl.)
+ 
+
+# Create workflow
+workflow1 <- 
+  workflow() %>% 
+  add_model(log_model1) %>% 
+  add_recipe(recipe1)
+
+
+```
+
+```{r}
+
+log_fit1 <-fit(workflow1, data = dfa_analysis)
+
+```
+
+```{r}
+
+# Apply model in the assessment data
+results1 <- 
+  predict(log_fit1, dfa_assessment) %>% 
+  pluck(1) %>% 
+  bind_cols(dfa_assessment, predictedClass = .) 
+
+
+results1 %>% 
+  select(id, high_booking_rate, predictedClass)
+
+
+```
+
+
+```{r}
+
+# Predictive performance measure
+
+### Confusion matrix
+conMatrix1 <- results1 %>% 
+  conf_mat(truth = high_booking_rate, estimate = predictedClass)
+conMatrix1
+summary(conMatrix1)
+
+
+```
+
+
+### Random Forest Regression
+```{r}
+
+
+# Create a random forest model object
+model2 <- rand_forest(
+  trees = 1000,
+  mtry = 7
+) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")  
+
+# Create recipe
+recipe2 <- 
+  recipe(high_booking_rate ~ ., data = dfa_analysis) %>% 
+  step_rm(id, access, city, description, host_about, host_acceptance_rate, host_location, host_neighbourhood, house_rules, interaction, is_business_travel_ready, latitude, longitude, neighborhood_overview, neighbourhood, notes, space, state, transit, zipcode, square_feet, X.randomControl.)
+ 
+
+# Create workflow
+workflow2 <- 
+  workflow() %>% 
+  add_model(model2) %>% 
+  add_recipe(recipe2)
+
+```
+
+```{r}
+fit2 <-fit(workflow2, data = dfa_analysis)
+
+```
+
+
+```{r}
+# Apply model in the assessment data
+results2 <- 
+  predict(fit2, dfa_assessment) %>% 
+  pluck(1) %>% 
+  bind_cols(dfa_assessment, predictedClass = .) 
+
+
+results2 %>% 
+  select(id, high_booking_rate, predictedClass)
+
+```
+
+
+```{r}
+# Predictive performance measure
+
+### Confusion matrix
+conMatrix2 <- results2 %>% 
+  conf_mat(truth = high_booking_rate, estimate = predictedClass)
+conMatrix2
+summary(conMatrix2)
+
+```
+
+
+
+```{r}
+
+# Import the test dataset
+dfa_test<- read.csv("/Users/xuzhuxuan/Desktop/Course/DataMining/Project/airbnb-test.csv") 
+
+```
+
+```{r}
+# Use function to clean dataset
+dfa_test_clean <- clean(dfa_test)
+
+```
+
+```{r}
+fit_best <-fit(workflow2, data = dfa_clean)
+```
+
+```{r}
+
+# Produce prediction value for the test data
+# Apply model in the test data
+results1_test <- 
+  predict(fit_best, dfa_test_clean) %>% 
+  pluck(1) %>% 
+  bind_cols(dfa_test_clean, high_booking_rate = .) 
+
+airbnb <- results1_test %>% 
+  select(id,  high_booking_rate)
+
+
+airbnb
+
+
+```
+
+
+```{r}
+
+write_csv(airbnb, 'airbnb.csv')
+
+```
+
+
+
+
